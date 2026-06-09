@@ -1,0 +1,129 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: cmd/auth/Dockerfile   
+    command: ["/app/api"]
+    environment:
+      DB_CONN: 
+      REDIS_ADDR: 
+      SERVER_PORT: 
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker: # email worker (scaled horizontally)
+    build:
+      context: .
+      dockerfile: cmd/worker/Dockerfile  
+    command: ["/app/worker"]
+    environment:
+      DB_CONN: 
+      REDIS_ADDR: 
+      SMTP_HOST: 
+      SMTP_PORT: 
+      SMTP_USER: 
+      SMTP_PASS: 
+    depends_on:
+      - redis
+      - db
+    restart: always
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD", "pgrep", "worker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  cleanup: # cleanup worker
+    build:
+      context: .
+      dockerfile: cmd/cleanup/Dockerfile
+    command: ["/app/cleanup"]
+    environment:
+      DB_CONN:
+    depends_on:
+      - db
+    restart: always
+    healthcheck:
+      test: ["CMD", "pgrep", "cleanup"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: 
+      POSTGRES_PASSWORD: 
+      POSTGRES_DB: 
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./monitoring:/etc/prometheus
+    ports:
+      - "9090:9090"
+    restart: always
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD="Dhakool1$"
+    depends_on:
+      - prometheus
+    restart: always
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: always
+
+volumes:
+  db_data:
+  redis_data:
