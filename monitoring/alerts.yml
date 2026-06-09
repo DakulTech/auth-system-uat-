@@ -1,0 +1,57 @@
+groups:
+  - name: service-alerts
+    interval: 15s
+    rules:
+      - alert: APIServiceDown
+        expr: up{job="api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "API service is down"
+          description: "The API job has been unreachable for 30s."
+
+      - alert: WorkerServiceDown
+        expr: up{job="worker"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker service is down"
+          description: "The Worker job has been unreachable for 30s."
+
+      - alert: CleanupServiceDown
+        expr: up{job="cleanup"} == 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cleanup service is down"
+          description: "The Cleanup job has been unreachable for 30s."
+
+      - alert: HighWorkerFailures
+        expr: increase(jobs_failed_total[1m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker failures are spiking"
+          description: "More than 5 jobs failed in the last minute."
+
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{job="cadvisor"}[1m]) > 0.8
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High CPU usage detected"
+          description: "Container CPU usage has exceeded 80% for over 2 minutes."
+
+      - alert: HighMemoryUsage
+        expr: container_memory_usage_bytes{job="cadvisor"} > 500000000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Container memory usage has exceeded 500MB for over 2 minutes."
